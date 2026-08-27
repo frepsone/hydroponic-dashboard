@@ -9,19 +9,25 @@
     body { font-family: sans-serif; background: #0e1a12; color: #eee; padding: 20px; max-width: 800px; margin: auto; }
     h1, h2 { color: #8fd694; }
     
-    /* Stile per i box in tempo reale */
     .dashboard-grid { display: flex; gap: 10px; margin-bottom: 20px; flex-wrap: wrap; }
     .card { background: #16241a; border-radius: 10px; padding: 15px; flex: 1; min-width: 150px; text-align: center; }
     .label { color: #9ab; font-size: 0.85em; margin-bottom: 5px; }
     .value { font-size: 1.8em; font-weight: bold; color: #fff; }
     
-    /* Stile per lo status */
     .status-box { background: #16241a; padding: 10px 15px; border-radius: 8px; display: inline-block; margin-bottom: 20px; font-weight: bold;}
     .online { color: #8fd694; }
     .offline { color: #e07a5f; }
 
+    /* Stile Form Manuale */
+    .form-container { background: #16241a; padding: 15px; border-radius: 10px; margin-bottom: 20px; }
+    .input-group { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 10px; }
+    input[type="datetime-local"], input[type="number"] { background: #0e1a12; color: #eee; border: 1px solid #2a3a2e; padding: 8px; border-radius: 5px; flex: 1; }
+    .checkbox-group { display: flex; gap: 15px; align-items: center; margin-bottom: 15px; font-size: 0.9em; }
+    .btn { background: #8fd694; color: #0e1a12; border: none; padding: 10px 20px; font-weight: bold; border-radius: 5px; cursor: pointer; width: 100%; }
+    .btn:hover { background: #7bc280; }
+
     canvas { background: #16241a; border-radius: 10px; padding: 10px; margin-bottom: 20px; width: 100%; }
-    table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+    table { width: 100%; border-collapse: collapse; margin-top: 10px; margin-bottom: 30px; font-size: 0.9em; }
     th, td { padding: 8px; text-align: left; border-bottom: 1px solid #2a3a2e; }
     th { background-color: #16241a; color: #8fd694; }
   </style>
@@ -39,11 +45,30 @@
     <div class="card"><div class="label">Aria (DHT22)</div><div class="value" id="val-aria">-- °C</div></div>
     <div class="card"><div class="label">Umidità Aria</div><div class="value" id="val-umidita">-- %</div></div>
   </div>
+
+  <h2>Registrazione Manuale</h2>
+  <div class="form-container">
+    <div class="input-group">
+      <input type="datetime-local" id="input-data">
+      <input type="number" id="input-ph" step="0.1" placeholder="Valore pH (es. 6.0)">
+      <input type="number" id="input-ec" step="1" placeholder="Valore EC (es. 1200)">
+    </div>
+    <div class="checkbox-group">
+      <label><input type="checkbox" id="chk-acido"> Aggiunto Acido</label>
+      <label><input type="checkbox" id="chk-nutrienti"> Aggiunti Nutrienti</label>
+    </div>
+    <button class="btn" id="btn-salva">Salva Valore</button>
+  </div>
+
+  <h2>Storico Manuale pH / EC</h2>
+  <table id="tabella-manuale">
+    <tr><th>Data e Ora</th><th>pH</th><th>EC</th><th>Azioni Extra</th></tr>
+  </table>
   
   <h2>Andamento Temperature</h2>
   <canvas id="grafico"></canvas>
   
-  <h2>Storico Dettagliato (Ultime 100)</h2>
+  <h2>Storico Sensori (Ultime 100)</h2>
   <table id="tabella">
     <tr><th>Data e Ora</th><th>T. Acqua</th><th>T. Aria</th><th>Umidità</th></tr>
   </table>
@@ -51,36 +76,31 @@
   <!-- Modulo Firebase V9 -->
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-app.js";
-    import { getDatabase, ref, onValue, limitToLast, query } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-database.js";
+    import { getDatabase, ref, onValue, limitToLast, query, push } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-database.js";
 
-    // INSERISCI QUI I TUOI DUE CODICI FIREBASE (Mantieni le virgolette!)
+    // INSERISCI QUI I TUOI DUE CODICI FIREBASE
     const firebaseConfig = {
-      apiKey: "AIzaSyDTNX50TvZb-8Q7jcg8KxDyymJ8v0TY1_0",
-      databaseURL: "https://hydrostradellazzo-default-rtdb.europe-west1.firebasedatabase.app"
+      apiKey: "INSERISCI_QUI_LA_CHIAVE_AIza...",
+      databaseURL: "INSERISCI_QUI_L_URL_DEL_DATABASE"
     };
 
     const app = initializeApp(firebaseConfig);
     const db = getDatabase(app);
     
-    // --- 1. GESTIONE TEMPO REALE E ONLINE/OFFLINE ---
+    // --- TEMPO REALE E ONLINE/OFFLINE ---
     let offlineTimer;
     const statusIndicator = document.getElementById('status-indicator');
     
     onValue(ref(db, 'stato'), (snapshot) => {
       const data = snapshot.val();
       if (!data) return;
-
-      // Aggiorna le carte in tempo reale (formattate con 1 decimale)
       document.getElementById('val-acqua').innerText = parseFloat(data.t_acqua).toFixed(1) + " °C";
       document.getElementById('val-aria').innerText = parseFloat(data.t_aria).toFixed(1) + " °C";
       document.getElementById('val-umidita').innerText = parseFloat(data.u_aria).toFixed(1) + " %";
       document.getElementById('last-update').innerText = "Ultimo contatto: " + data.ultimo_aggiornamento;
 
-      // Imposta su ONLINE
       statusIndicator.innerText = "ONLINE 🟢";
       statusIndicator.className = "online";
-
-      // Resetta il timer: se non arrivano nuovi dati per 15 secondi, va OFFLINE
       clearTimeout(offlineTimer);
       offlineTimer = setTimeout(() => {
         statusIndicator.innerText = "OFFLINE 🔴 (Scollegata o senza Wi-Fi)";
@@ -88,7 +108,56 @@
       }, 15000); 
     });
 
-    // --- 2. GESTIONE STORICO E GRAFICO ---
+    // --- FORM MANUALE ---
+    // Imposta la data/ora attuale di default
+    const now = new Date();
+    now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
+    document.getElementById('input-data').value = now.toISOString().slice(0,16);
+
+    document.getElementById('btn-salva').addEventListener('click', () => {
+      const dataOra = document.getElementById('input-data').value;
+      const ph = document.getElementById('input-ph').value;
+      const ec = document.getElementById('input-ec').value;
+      const acido = document.getElementById('chk-acido').checked;
+      const nutrienti = document.getElementById('chk-nutrienti').checked;
+
+      if (!ph && !ec) {
+        alert("Inserisci almeno un valore di pH o EC!");
+        return;
+      }
+
+      push(ref(db, 'registri_manuali'), {
+        data_ora: dataOra.replace("T", " "),
+        ph: ph || "-",
+        ec: ec || "-",
+        acido: acido ? "Sì" : "No",
+        nutrienti: nutrienti ? "Sì" : "No"
+      }).then(() => {
+        document.getElementById('input-ph').value = "";
+        document.getElementById('input-ec').value = "";
+        document.getElementById('chk-acido').checked = false;
+        document.getElementById('chk-nutrienti').checked = false;
+      });
+    });
+
+    // --- TABELLA STORICO MANUALE ---
+    onValue(query(ref(db, 'registri_manuali'), limitToLast(50)), (snapshot) => {
+      const data = snapshot.val();
+      const table = document.getElementById('tabella-manuale');
+      table.innerHTML = "<tr><th>Data e Ora</th><th>pH</th><th>EC</th><th>Azioni Extra</th></tr>";
+      if (!data) return;
+
+      Object.values(data).forEach(row => {
+        let extra = [];
+        if (row.acido === "Sì") extra.push("💧 Acido");
+        if (row.nutrienti === "Sì") extra.push("🌿 Nutrienti");
+        
+        let newRow = table.insertRow(1);
+        newRow.innerHTML = `<td>${row.data_ora}</td><td>${row.ph}</td><td>${row.ec}</td><td>${extra.join(" + ") || "-"}</td>`;
+      });
+    });
+
+    // --- STORICO SENSORI E GRAFICO ---
     const storicoRef = query(ref(db, 'storico'), limitToLast(100));
     let chart = new Chart(document.getElementById('grafico'), {
       type: 'line',
@@ -105,15 +174,12 @@
 
       const table = document.getElementById('tabella');
       table.innerHTML = "<tr><th>Data e Ora</th><th>T. Acqua</th><th>T. Aria</th><th>Umidità</th></tr>";
-      
       let labels = [], acqua = [], aria = [];
 
       Object.values(data).forEach(row => {
-        // Usa solo l'orario per l'asse X del grafico (es. 15:45)
         labels.push(row.ora.substring(11, 16)); 
         acqua.push(row.t_acqua);
         aria.push(row.t_aria);
-        
         let newRow = table.insertRow(1); 
         newRow.innerHTML = `<td>${row.ora}</td><td>${parseFloat(row.t_acqua).toFixed(1)}°C</td><td>${parseFloat(row.t_aria).toFixed(1)}°C</td><td>${parseFloat(row.u_aria).toFixed(1)}%</td>`;
       });
