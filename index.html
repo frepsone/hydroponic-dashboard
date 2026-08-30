@@ -10,9 +10,9 @@
     h1, h2 { color: #8fd694; }
     
     .dashboard-grid { display: flex; gap: 10px; margin-bottom: 20px; flex-wrap: wrap; }
-    .card { background: #16241a; border-radius: 10px; padding: 15px; flex: 1; min-width: 150px; text-align: center; }
+    .card { background: #16241a; border-radius: 10px; padding: 15px; flex: 1; min-width: 120px; text-align: center; }
     .label { color: #9ab; font-size: 0.85em; margin-bottom: 5px; }
-    .value { font-size: 1.8em; font-weight: bold; color: #fff; }
+    .value { font-size: 1.6em; font-weight: bold; color: #fff; }
     
     .status-box { background: #16241a; padding: 10px 15px; border-radius: 8px; display: inline-block; margin-bottom: 20px; font-weight: bold;}
     .online { color: #8fd694; }
@@ -21,13 +21,13 @@
     /* Stile Form Manuale */
     .form-container { background: #16241a; padding: 15px; border-radius: 10px; margin-bottom: 20px; }
     .input-group { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 10px; }
-    input[type="datetime-local"], input[type="number"] { background: #0e1a12; color: #eee; border: 1px solid #2a3a2e; padding: 8px; border-radius: 5px; flex: 1; }
-    .checkbox-group { display: flex; gap: 15px; align-items: center; margin-bottom: 15px; font-size: 0.9em; }
+    input[type="datetime-local"], input[type="number"] { background: #0e1a12; color: #eee; border: 1px solid #2a3a2e; padding: 8px; border-radius: 5px; flex: 1; min-width: 120px; }
+    .checkbox-group { display: flex; gap: 15px; align-items: center; margin-bottom: 15px; font-size: 0.9em; flex-wrap: wrap; }
     .btn { background: #8fd694; color: #0e1a12; border: none; padding: 10px 20px; font-weight: bold; border-radius: 5px; cursor: pointer; width: 100%; }
     .btn:hover { background: #7bc280; }
 
     canvas { background: #16241a; border-radius: 10px; padding: 10px; margin-bottom: 20px; width: 100%; }
-    table { width: 100%; border-collapse: collapse; margin-top: 10px; margin-bottom: 30px; font-size: 0.9em; }
+    table { width: 100%; border-collapse: collapse; margin-top: 10px; margin-bottom: 30px; font-size: 0.85em; }
     th, td { padding: 8px; text-align: left; border-bottom: 1px solid #2a3a2e; }
     th { background-color: #16241a; color: #8fd694; }
   </style>
@@ -41,9 +41,10 @@
   </div>
 
   <div class="dashboard-grid">
-    <div class="card"><div class="label">Acqua (DS18B20)</div><div class="value" id="val-acqua">-- °C</div></div>
-    <div class="card"><div class="label">Aria (DHT22)</div><div class="value" id="val-aria">-- °C</div></div>
-    <div class="card"><div class="label">Umidità Aria</div><div class="value" id="val-umidita">-- %</div></div>
+    <div class="card"><div class="label">Acqua</div><div class="value" id="val-acqua">-- °C</div></div>
+    <div class="card"><div class="label">Aria</div><div class="value" id="val-aria">-- °C</div></div>
+    <div class="card"><div class="label">Umidità</div><div class="value" id="val-umidita">-- %</div></div>
+    <div class="card"><div class="label">Sensore TDS</div><div class="value" id="val-tds">-- ppm</div></div>
   </div>
 
   <h2>Registrazione Manuale</h2>
@@ -68,9 +69,9 @@
   <h2>Andamento Temperature</h2>
   <canvas id="grafico"></canvas>
   
-  <h2>Storico Sensori (Ultime 100)</h2>
+  <h2>Storico Sensori (Ultime 100 letture)</h2>
   <table id="tabella">
-    <tr><th>Data e Ora</th><th>T. Acqua</th><th>T. Aria</th><th>Umidità</th></tr>
+    <tr><th>Data e Ora</th><th>T. Acqua</th><th>T. Aria</th><th>Umidità</th><th>TDS (ppm)</th></tr>
   </table>
 
   <!-- Modulo Firebase V9 -->
@@ -97,6 +98,11 @@
       document.getElementById('val-acqua').innerText = parseFloat(data.t_acqua).toFixed(1) + " °C";
       document.getElementById('val-aria').innerText = parseFloat(data.t_aria).toFixed(1) + " °C";
       document.getElementById('val-umidita').innerText = parseFloat(data.u_aria).toFixed(1) + " %";
+      
+      // Controllo per retrocompatibilità se il TDS non è stato ancora inviato
+      let tdsVal = data.tds !== undefined ? parseFloat(data.tds).toFixed(0) : "--";
+      document.getElementById('val-tds').innerText = tdsVal + " ppm";
+      
       document.getElementById('last-update').innerText = "Ultimo contatto: " + data.ultimo_aggiornamento;
 
       statusIndicator.innerText = "ONLINE 🟢";
@@ -109,7 +115,6 @@
     });
 
     // --- FORM MANUALE ---
-    // Imposta la data/ora attuale di default
     const now = new Date();
     now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
     document.getElementById('input-data').value = now.toISOString().slice(0,16);
@@ -173,15 +178,18 @@
       if (!data) return;
 
       const table = document.getElementById('tabella');
-      table.innerHTML = "<tr><th>Data e Ora</th><th>T. Acqua</th><th>T. Aria</th><th>Umidità</th></tr>";
+      table.innerHTML = "<tr><th>Data e Ora</th><th>T. Acqua</th><th>T. Aria</th><th>Umidità</th><th>TDS (ppm)</th></tr>";
       let labels = [], acqua = [], aria = [];
 
       Object.values(data).forEach(row => {
         labels.push(row.ora.substring(11, 16)); 
         acqua.push(row.t_acqua);
         aria.push(row.t_aria);
+        
+        let tdsStr = row.tds !== undefined ? parseFloat(row.tds).toFixed(0) + " ppm" : "-";
+        
         let newRow = table.insertRow(1); 
-        newRow.innerHTML = `<td>${row.ora}</td><td>${parseFloat(row.t_acqua).toFixed(1)}°C</td><td>${parseFloat(row.t_aria).toFixed(1)}°C</td><td>${parseFloat(row.u_aria).toFixed(1)}%</td>`;
+        newRow.innerHTML = `<td>${row.ora}</td><td>${parseFloat(row.t_acqua).toFixed(1)}°C</td><td>${parseFloat(row.t_aria).toFixed(1)}°C</td><td>${parseFloat(row.u_aria).toFixed(1)}%</td><td>${tdsStr}</td>`;
       });
 
       chart.data.labels = labels;
