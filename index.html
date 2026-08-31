@@ -22,11 +22,16 @@
     .card-mini .value { font-size: 24px; font-weight: 700; }
     .v-acqua { color: var(--blue); } .v-aria { color: var(--orange); } .v-umidita { color: var(--green); } .v-tds { color: var(--text); }
 
+    /* Filtri Mese/Anno in stile iOS */
+    .filter-row { display: flex; gap: 12px; margin-bottom: 15px; }
+    .ios-select { background: var(--pill); color: var(--text); border: none; padding: 12px 16px; border-radius: 12px; font-size: 16px; font-weight: 600; outline: none; -webkit-appearance: none; appearance: none; flex: 1; text-align: center; cursor: pointer; }
+    
     /* Calendario a Scorrimento Orizzontale (Swipe) */
     .calendar-strip { display: flex; overflow-x: auto; gap: 10px; padding-bottom: 10px; margin-bottom: 20px; scroll-behavior: smooth; -webkit-overflow-scrolling: touch; }
     .calendar-strip::-webkit-scrollbar { display: none; }
     .day-pill { background: var(--pill); color: var(--text-sec); padding: 10px 16px; border-radius: 20px; font-size: 14px; font-weight: 600; white-space: nowrap; cursor: pointer; transition: all 0.2s; }
     .day-pill.active { background: var(--text); color: var(--bg); }
+    .no-data { color: var(--text-sec); font-size: 15px; padding: 10px; text-align: center; width: 100%; }
 
     /* Vista Giorno Singolo */
     .day-view { background: var(--card); border-radius: 16px; padding: 20px; display: none; }
@@ -36,7 +41,8 @@
     .avg-val { font-size: 18px; font-weight: 700; }
     .avg-lbl { font-size: 12px; color: var(--text-sec); text-transform: uppercase; margin-top: 4px; }
     
-    canvas { width: 100%; max-height: 250px; margin-bottom: 20px; }
+    /* Aumentata l'altezza del grafico per fare spazio all'asse degli orari */
+    canvas { width: 100%; max-height: 280px; margin-bottom: 20px; }
     
     .action-row { display: flex; gap: 10px; }
     .btn { flex: 1; background: #2C2C2E; color: var(--blue); border: none; padding: 12px; border-radius: 12px; font-weight: 600; font-size: 15px; cursor: pointer; }
@@ -59,10 +65,13 @@
     <div class="card-mini"><div class="label">TDS</div><div class="value v-tds" id="val-tds">--</div></div>
   </div>
 
-  <!-- Il nuovo Calendario Swipe -->
+  <div class="filter-row">
+    <select id="month-select" class="ios-select"></select>
+    <select id="year-select" class="ios-select"></select>
+  </div>
+
   <div class="calendar-strip" id="calendar-strip"></div>
 
-  <!-- Area Centrale Dinamica -->
   <div class="day-view" id="day-view">
     <div class="day-title" id="day-title">Seleziona un giorno</div>
     
@@ -72,6 +81,7 @@
       <div class="avg-item"><div class="avg-val v-umidita" id="avg-umidita">--%</div><div class="avg-lbl">Media Umidità</div></div>
     </div>
 
+    <!-- Il Grafico Dettagliato ogni 15 min -->
     <canvas id="main-chart"></canvas>
 
     <div class="action-row">
@@ -82,7 +92,7 @@
 
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-app.js";
-    import { getDatabase, ref, onValue, limitToLast, query, push } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-database.js";
+    import { getDatabase, ref, onValue, query, push, orderByChild, startAt, endAt } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-database.js";
 
     // INSERISCI QUI I TUOI DATI FIREBASE
     const firebaseConfig = {
@@ -96,6 +106,7 @@
     let mainChart = null;
     let storeGiorni = {}; 
     let activeDateStr = "";
+    let unsubscribeStorico = null; 
 
     // --- TEMPO REALE ---
     let offlineTimer;
@@ -114,39 +125,98 @@
       offlineTimer = setTimeout(() => { indic.innerText = "OFFLINE"; indic.className = "offline"; }, 15000); 
     });
 
-    // --- STORICO & CALENDARIO ---
-    onValue(query(ref(db, 'storico'), limitToLast(1000)), (snapshot) => {
-      const data = snapshot.val();
-      if (!data) return;
+    // --- FILTRI MESE E ANNO ---
+    const monthSelect = document.getElementById('month-select');
+    const yearSelect = document.getElementById('year-select');
 
-      storeGiorni = {};
-      Object.values(data).forEach(row => {
-        const dataStr = row.ora.substring(0, 10);
-        const oraStr = row.ora.substring(11, 16);
-        if (!storeGiorni[dataStr]) {
-          storeGiorni[dataStr] = { letture: [], sumAcqua: 0, sumAria: 0, sumHum: 0, count: 0 };
+    function initFiltri() {
+      const now = new Date();
+      let currYear = now.getFullYear();
+      let currMonth = String(now.getMonth() + 1).padStart(2, '0');
+
+      for(let y = 2026; y <= currYear; y++) {
+        let opt = document.createElement('option');
+        opt.value = y; opt.text = y;
+        yearSelect.appendChild(opt);
+      }
+      yearSelect.value = currYear;
+
+      aggiornaMesiDisponibili();
+      monthSelect.value = currMonth;
+
+      yearSelect.addEventListener('change', () => { aggiornaMesiDisponibili(); caricaDatiMese(); });
+      monthSelect.addEventListener('change', () => { caricaDatiMese(); });
+      
+      caricaDatiMese();
+    }
+
+    function aggiornaMesiDisponibili() {
+      const selectedYear = parseInt(yearSelect.value);
+      const mesi = ["Gennaio", "Febbraio", "Marzo", "Aprile", "Maggio", "Giugno", "Luglio", "Agosto", "Settembre", "Ottobre", "Novembre", "Dicembre"];
+      const currentVal = monthSelect.value;
+      monthSelect.innerHTML = "";
+      
+      for(let i = 0; i < 12; i++) {
+        if(selectedYear === 2026 && i < 7) continue; 
+        
+        let mNum = String(i + 1).padStart(2, '0');
+        let opt = document.createElement('option');
+        opt.value = mNum; opt.text = mesi[i];
+        monthSelect.appendChild(opt);
+      }
+      
+      if([...monthSelect.options].some(o => o.value === currentVal)) {
+        monthSelect.value = currentVal;
+      } else {
+        monthSelect.selectedIndex = monthSelect.options.length - 1;
+      }
+    }
+
+    // --- CARICAMENTO STORICO ---
+    function caricaDatiMese() {
+      if(unsubscribeStorico) unsubscribeStorico(); 
+
+      const anno = yearSelect.value;
+      const mese = monthSelect.value;
+      const prefissoRicerca = `${anno}-${mese}`;
+
+      const queryMese = query(ref(db, 'storico'), orderByChild('ora'), startAt(prefissoRicerca), endAt(prefissoRicerca + '\uf8ff'));
+
+      unsubscribeStorico = onValue(queryMese, (snapshot) => {
+        const data = snapshot.val();
+        storeGiorni = {};
+        
+        if (data) {
+          Object.values(data).forEach(row => {
+            const dataStr = row.ora.substring(0, 10);
+            const oraStr = row.ora.substring(11, 16); // Formato orario 15:30
+            if (!storeGiorni[dataStr]) {
+              storeGiorni[dataStr] = { letture: [], sumAcqua: 0, sumAria: 0, sumHum: 0, count: 0 };
+            }
+            storeGiorni[dataStr].letture.push({ ora: oraStr, acqua: row.t_acqua, aria: row.t_aria });
+            storeGiorni[dataStr].sumAcqua += parseFloat(row.t_acqua);
+            storeGiorni[dataStr].sumAria += parseFloat(row.t_aria);
+            storeGiorni[dataStr].sumHum += parseFloat(row.u_aria);
+            storeGiorni[dataStr].count++;
+          });
         }
-        storeGiorni[dataStr].letture.push({ ora: oraStr, acqua: row.t_acqua, aria: row.t_aria });
-        storeGiorni[dataStr].sumAcqua += parseFloat(row.t_acqua);
-        storeGiorni[dataStr].sumAria += parseFloat(row.t_aria);
-        storeGiorni[dataStr].sumHum += parseFloat(row.u_aria);
-        storeGiorni[dataStr].count++;
+        renderCalendarStrip();
       });
-
-      renderCalendarStrip();
-    });
+    }
 
     function renderCalendarStrip() {
       const strip = document.getElementById('calendar-strip');
       strip.innerHTML = "";
       const dateOrdinate = Object.keys(storeGiorni).sort().reverse();
       
-      if (dateOrdinate.length === 0) return;
+      if (dateOrdinate.length === 0) {
+        document.getElementById('day-view').style.display = 'none';
+        strip.innerHTML = '<div class="no-data">Nessun dato in questo mese. 📭</div>';
+        return;
+      }
 
-      // Crea i "Pilloli" del calendario
       dateOrdinate.forEach(dataStr => {
         const d = new Date(dataStr);
-        // Formatta in "Lun 26 Ago"
         const label = d.toLocaleDateString('it-IT', { weekday: 'short', day: 'numeric', month: 'short' });
         
         const pill = document.createElement('div');
@@ -156,20 +226,18 @@
         strip.appendChild(pill);
       });
 
-      // Seleziona automaticamente l'ultimo giorno disponibile al caricamento
       if (!activeDateStr || !storeGiorni[activeDateStr]) {
         loadDayView(dateOrdinate[0], strip.firstChild);
       } else {
-        // Mantiene la selezione se arrivano nuovi dati
         const activeIdx = dateOrdinate.indexOf(activeDateStr);
         loadDayView(activeDateStr, strip.children[activeIdx]);
       }
     }
 
+    // --- VISTA GIORNALIERA E GRAFICO ---
     function loadDayView(dataStr, pillElement) {
       activeDateStr = dataStr;
       
-      // Aggiorna lo stile visivo del calendario
       document.querySelectorAll('.day-pill').forEach(el => el.classList.remove('active'));
       pillElement.classList.add('active');
 
@@ -179,29 +247,48 @@
       const d = new Date(dataStr);
       document.getElementById('day-title').innerText = d.toLocaleDateString('it-IT', { weekday: 'long', day: 'numeric', month: 'long' });
 
-      // Calcola e inserisce le Medie Matematiche
+      // Inserisce le Medie nei riquadri
       document.getElementById('avg-acqua').innerText = (g.sumAcqua / g.count).toFixed(1) + "°";
       document.getElementById('avg-aria').innerText = (g.sumAria / g.count).toFixed(1) + "°";
       document.getElementById('avg-umidita').innerText = (g.sumHum / g.count).toFixed(0) + "%";
 
-      // Disegna o Aggiorna il Grafico
       const ctx = document.getElementById('main-chart').getContext('2d');
       if (mainChart) mainChart.destroy();
       
+      // Costruisce il grafico con asse del tempo (15 min) e tooltip interattivo
       mainChart = new Chart(ctx, {
         type: 'line',
         data: {
           labels: g.letture.map(l => l.ora),
           datasets: [
-            { label: 'Acqua (°C)', borderColor: '#0A84FF', data: g.letture.map(l => l.acqua), pointRadius: 0, tension: 0.4, borderWidth: 3 },
-            { label: 'Aria (°C)', borderColor: '#FF9F0A', data: g.letture.map(l => l.aria), pointRadius: 0, tension: 0.4, borderWidth: 3 }
+            { label: 'Acqua', borderColor: '#0A84FF', data: g.letture.map(l => l.acqua), pointRadius: 0, tension: 0.4, borderWidth: 3 },
+            { label: 'Aria', borderColor: '#FF9F0A', data: g.letture.map(l => l.aria), pointRadius: 0, tension: 0.4, borderWidth: 3 }
           ]
         },
         options: {
           responsive: true,
           interaction: { mode: 'index', intersect: false },
-          plugins: { legend: { display: false } },
-          scales: { x: { display: false }, y: { grid: { color: '#38383A' } } }
+          plugins: { 
+            legend: { display: false },
+            tooltip: {
+              callbacks: {
+                title: function(context) { return 'Ore ' + context[0].label; },
+                label: function(context) { return context.dataset.label + ': ' + context.parsed.y + '°C'; }
+              }
+            }
+          },
+          scales: { 
+            x: { 
+              display: true, // Adesso l'asse delle ore si vede!
+              grid: { display: false },
+              ticks: { color: '#8E8E93', maxTicksLimit: 8 } 
+            }, 
+            y: { 
+              display: true,
+              grid: { color: '#38383A' },
+              ticks: { color: '#8E8E93' }
+            } 
+          }
         }
       });
     }
@@ -223,6 +310,8 @@
     
     document.getElementById('btn-nutrienti').onclick = () => registraAzione('Nutrienti');
     document.getElementById('btn-acido').onclick = () => registraAzione('Acido');
+
+    initFiltri();
   </script>
 </body>
 </html>
