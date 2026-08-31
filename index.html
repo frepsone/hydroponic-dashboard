@@ -2,84 +2,89 @@
 <html lang="it">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>HydroponicOne Cloud</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+  <title>Hydroponic iOS</title>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <style>
-    body { font-family: sans-serif; background: #0e1a12; color: #eee; padding: 20px; max-width: 800px; margin: auto; }
-    h1, h2 { color: #8fd694; }
+    :root { --bg: #000000; --card: #1C1C1E; --text: #FFFFFF; --text-sec: #8E8E93; --green: #30D158; --blue: #0A84FF; --orange: #FF9F0A; --red: #FF453A; --pill: #2C2C2E; }
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background: var(--bg); color: var(--text); margin: 0; padding: 20px; padding-bottom: 50px; }
+    h1 { font-size: 28px; font-weight: 700; margin-bottom: 20px; letter-spacing: 0.5px; }
     
-    .dashboard-grid { display: flex; gap: 10px; margin-bottom: 20px; flex-wrap: wrap; }
-    .card { background: #16241a; border-radius: 10px; padding: 15px; flex: 1; min-width: 120px; text-align: center; }
-    .label { color: #9ab; font-size: 0.85em; margin-bottom: 5px; }
-    .value { font-size: 1.6em; font-weight: bold; color: #fff; }
+    .status-box { background: var(--card); padding: 16px; border-radius: 16px; margin-bottom: 24px; font-weight: 600; font-size: 15px; }
+    .status-box span { font-weight: 700; }
+    .online { color: var(--green); }
+    .offline { color: var(--red); }
+    .update-time { font-size: 13px; color: var(--text-sec); font-weight: 400; margin-top: 6px; }
+
+    .grid { display: flex; gap: 12px; margin-bottom: 30px; flex-wrap: wrap; }
+    .card-mini { background: var(--card); border-radius: 16px; padding: 16px; flex: 1; min-width: 130px; }
+    .card-mini .label { color: var(--text-sec); font-size: 13px; font-weight: 600; margin-bottom: 8px; text-transform: uppercase; }
+    .card-mini .value { font-size: 24px; font-weight: 700; }
+    .v-acqua { color: var(--blue); } .v-aria { color: var(--orange); } .v-umidita { color: var(--green); } .v-tds { color: var(--text); }
+
+    /* Calendario a Scorrimento Orizzontale (Swipe) */
+    .calendar-strip { display: flex; overflow-x: auto; gap: 10px; padding-bottom: 10px; margin-bottom: 20px; scroll-behavior: smooth; -webkit-overflow-scrolling: touch; }
+    .calendar-strip::-webkit-scrollbar { display: none; }
+    .day-pill { background: var(--pill); color: var(--text-sec); padding: 10px 16px; border-radius: 20px; font-size: 14px; font-weight: 600; white-space: nowrap; cursor: pointer; transition: all 0.2s; }
+    .day-pill.active { background: var(--text); color: var(--bg); }
+
+    /* Vista Giorno Singolo */
+    .day-view { background: var(--card); border-radius: 16px; padding: 20px; display: none; }
+    .day-title { font-size: 20px; font-weight: 700; margin-bottom: 15px; }
+    .averages-grid { display: flex; justify-content: space-between; margin-bottom: 20px; border-bottom: 1px solid #38383A; padding-bottom: 15px; }
+    .avg-item { text-align: center; }
+    .avg-val { font-size: 18px; font-weight: 700; }
+    .avg-lbl { font-size: 12px; color: var(--text-sec); text-transform: uppercase; margin-top: 4px; }
     
-    .status-box { background: #16241a; padding: 10px 15px; border-radius: 8px; display: inline-block; margin-bottom: 20px; font-weight: bold;}
-    .online { color: #8fd694; }
-    .offline { color: #e07a5f; }
-
-    /* Stile Form Manuale */
-    .form-container { background: #16241a; padding: 15px; border-radius: 10px; margin-bottom: 20px; }
-    .input-group { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 10px; }
-    input[type="datetime-local"], input[type="number"] { background: #0e1a12; color: #eee; border: 1px solid #2a3a2e; padding: 8px; border-radius: 5px; flex: 1; min-width: 120px; }
-    .checkbox-group { display: flex; gap: 15px; align-items: center; margin-bottom: 15px; font-size: 0.9em; flex-wrap: wrap; }
-    .btn { background: #8fd694; color: #0e1a12; border: none; padding: 10px 20px; font-weight: bold; border-radius: 5px; cursor: pointer; width: 100%; }
-    .btn:hover { background: #7bc280; }
-
-    canvas { background: #16241a; border-radius: 10px; padding: 10px; margin-bottom: 20px; width: 100%; }
-    table { width: 100%; border-collapse: collapse; margin-top: 10px; margin-bottom: 30px; font-size: 0.85em; }
-    th, td { padding: 8px; text-align: left; border-bottom: 1px solid #2a3a2e; }
-    th { background-color: #16241a; color: #8fd694; }
+    canvas { width: 100%; max-height: 250px; margin-bottom: 20px; }
+    
+    .action-row { display: flex; gap: 10px; }
+    .btn { flex: 1; background: #2C2C2E; color: var(--blue); border: none; padding: 12px; border-radius: 12px; font-weight: 600; font-size: 15px; cursor: pointer; }
+    .btn:active { background: #3A3A3C; }
+    .btn.acid { color: var(--orange); }
   </style>
 </head>
 <body>
-  <h1>HydroponicOne - Dashboard</h1>
+  <h1>Riepilogo</h1>
   
   <div class="status-box">
-    Stato Centralina: <span id="status-indicator" class="offline">IN ATTESA DATI... ⚪</span>
-    <div style="font-size: 0.7em; color: #678; font-weight: normal; margin-top: 4px;" id="last-update">Ultimo contatto: --</div>
+    Stato Sistema: <span id="status-indicator" class="offline">IN ATTESA...</span>
+    <div class="update-time" id="last-update">Ultimo contatto: --</div>
   </div>
 
-  <div class="dashboard-grid">
-    <div class="card"><div class="label">Acqua</div><div class="value" id="val-acqua">-- °C</div></div>
-    <div class="card"><div class="label">Aria</div><div class="value" id="val-aria">-- °C</div></div>
-    <div class="card"><div class="label">Umidità</div><div class="value" id="val-umidita">-- %</div></div>
-    <div class="card"><div class="label">Sensore TDS</div><div class="value" id="val-tds">-- ppm</div></div>
+  <div class="grid">
+    <div class="card-mini"><div class="label">Acqua</div><div class="value v-acqua" id="val-acqua">--°</div></div>
+    <div class="card-mini"><div class="label">Aria</div><div class="value v-aria" id="val-aria">--°</div></div>
+    <div class="card-mini"><div class="label">Umidità</div><div class="value v-umidita" id="val-umidita">--%</div></div>
+    <div class="card-mini"><div class="label">TDS</div><div class="value v-tds" id="val-tds">--</div></div>
   </div>
 
-  <h2>Registrazione Manuale</h2>
-  <div class="form-container">
-    <div class="input-group">
-      <input type="datetime-local" id="input-data">
-      <input type="number" id="input-ph" step="0.1" placeholder="Valore pH (es. 6.0)">
-      <input type="number" id="input-ec" step="1" placeholder="Valore EC (es. 1200)">
+  <!-- Il nuovo Calendario Swipe -->
+  <div class="calendar-strip" id="calendar-strip"></div>
+
+  <!-- Area Centrale Dinamica -->
+  <div class="day-view" id="day-view">
+    <div class="day-title" id="day-title">Seleziona un giorno</div>
+    
+    <div class="averages-grid">
+      <div class="avg-item"><div class="avg-val v-acqua" id="avg-acqua">--°</div><div class="avg-lbl">Media Acqua</div></div>
+      <div class="avg-item"><div class="avg-val v-aria" id="avg-aria">--°</div><div class="avg-lbl">Media Aria</div></div>
+      <div class="avg-item"><div class="avg-val v-umidita" id="avg-umidita">--%</div><div class="avg-lbl">Media Umidità</div></div>
     </div>
-    <div class="checkbox-group">
-      <label><input type="checkbox" id="chk-acido"> Aggiunto Acido</label>
-      <label><input type="checkbox" id="chk-nutrienti"> Aggiunti Nutrienti</label>
+
+    <canvas id="main-chart"></canvas>
+
+    <div class="action-row">
+      <button class="btn" id="btn-nutrienti">🌿 + Nutrienti</button>
+      <button class="btn acid" id="btn-acido">💧 + Acido</button>
     </div>
-    <button class="btn" id="btn-salva">Salva Valore</button>
   </div>
 
-  <h2>Storico Manuale pH / EC</h2>
-  <table id="tabella-manuale">
-    <tr><th>Data e Ora</th><th>pH</th><th>EC</th><th>Azioni Extra</th></tr>
-  </table>
-  
-  <h2>Andamento Temperature</h2>
-  <canvas id="grafico"></canvas>
-  
-  <h2>Storico Sensori (Ultime 100 letture)</h2>
-  <table id="tabella">
-    <tr><th>Data e Ora</th><th>T. Acqua</th><th>T. Aria</th><th>Umidità</th><th>TDS (ppm)</th></tr>
-  </table>
-
-  <!-- Modulo Firebase V9 -->
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-app.js";
     import { getDatabase, ref, onValue, limitToLast, query, push } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-database.js";
 
-    // INSERISCI QUI I TUOI DUE CODICI FIREBASE
+    // INSERISCI QUI I TUOI DATI FIREBASE
     const firebaseConfig = {
       apiKey: "AIzaSyDTNX50TvZb-8Q7jcg8KxDyymJ8v0TY1_0",
       databaseURL: "https://hydrostradellazzo-default-rtdb.europe-west1.firebasedatabase.app"
@@ -88,115 +93,136 @@
     const app = initializeApp(firebaseConfig);
     const db = getDatabase(app);
     
-    // --- TEMPO REALE E ONLINE/OFFLINE ---
+    let mainChart = null;
+    let storeGiorni = {}; 
+    let activeDateStr = "";
+
+    // --- TEMPO REALE ---
     let offlineTimer;
-    const statusIndicator = document.getElementById('status-indicator');
-    
     onValue(ref(db, 'stato'), (snapshot) => {
       const data = snapshot.val();
       if (!data) return;
-      document.getElementById('val-acqua').innerText = parseFloat(data.t_acqua).toFixed(1) + " °C";
-      document.getElementById('val-aria').innerText = parseFloat(data.t_aria).toFixed(1) + " °C";
-      document.getElementById('val-umidita').innerText = parseFloat(data.u_aria).toFixed(1) + " %";
-      
-      // Controllo per retrocompatibilità se il TDS non è stato ancora inviato
-      let tdsVal = data.tds !== undefined ? parseFloat(data.tds).toFixed(0) : "--";
-      document.getElementById('val-tds').innerText = tdsVal + " ppm";
-      
-      document.getElementById('last-update').innerText = "Ultimo contatto: " + data.ultimo_aggiornamento;
+      document.getElementById('val-acqua').innerText = parseFloat(data.t_acqua).toFixed(1) + "°";
+      document.getElementById('val-aria').innerText = parseFloat(data.t_aria).toFixed(1) + "°";
+      document.getElementById('val-umidita').innerText = parseFloat(data.u_aria).toFixed(0) + "%";
+      document.getElementById('val-tds').innerText = (data.tds !== undefined ? parseFloat(data.tds).toFixed(0) : "--") + " ppm";
+      document.getElementById('last-update').innerText = "Aggiornato: " + data.ultimo_aggiornamento;
 
-      statusIndicator.innerText = "ONLINE 🟢";
-      statusIndicator.className = "online";
+      const indic = document.getElementById('status-indicator');
+      indic.innerText = "ONLINE"; indic.className = "online";
       clearTimeout(offlineTimer);
-      offlineTimer = setTimeout(() => {
-        statusIndicator.innerText = "OFFLINE 🔴 (Scollegata o senza Wi-Fi)";
-        statusIndicator.className = "offline";
-      }, 15000); 
+      offlineTimer = setTimeout(() => { indic.innerText = "OFFLINE"; indic.className = "offline"; }, 15000); 
     });
 
-    // --- FORM MANUALE ---
-    const now = new Date();
-    now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
-    document.getElementById('input-data').value = now.toISOString().slice(0,16);
+    // --- STORICO & CALENDARIO ---
+    onValue(query(ref(db, 'storico'), limitToLast(1000)), (snapshot) => {
+      const data = snapshot.val();
+      if (!data) return;
 
-    document.getElementById('btn-salva').addEventListener('click', () => {
-      const dataOra = document.getElementById('input-data').value;
-      const ph = document.getElementById('input-ph').value;
-      const ec = document.getElementById('input-ec').value;
-      const acido = document.getElementById('chk-acido').checked;
-      const nutrienti = document.getElementById('chk-nutrienti').checked;
+      storeGiorni = {};
+      Object.values(data).forEach(row => {
+        const dataStr = row.ora.substring(0, 10);
+        const oraStr = row.ora.substring(11, 16);
+        if (!storeGiorni[dataStr]) {
+          storeGiorni[dataStr] = { letture: [], sumAcqua: 0, sumAria: 0, sumHum: 0, count: 0 };
+        }
+        storeGiorni[dataStr].letture.push({ ora: oraStr, acqua: row.t_acqua, aria: row.t_aria });
+        storeGiorni[dataStr].sumAcqua += parseFloat(row.t_acqua);
+        storeGiorni[dataStr].sumAria += parseFloat(row.t_aria);
+        storeGiorni[dataStr].sumHum += parseFloat(row.u_aria);
+        storeGiorni[dataStr].count++;
+      });
 
-      if (!ph && !ec) {
-        alert("Inserisci almeno un valore di pH o EC!");
-        return;
+      renderCalendarStrip();
+    });
+
+    function renderCalendarStrip() {
+      const strip = document.getElementById('calendar-strip');
+      strip.innerHTML = "";
+      const dateOrdinate = Object.keys(storeGiorni).sort().reverse();
+      
+      if (dateOrdinate.length === 0) return;
+
+      // Crea i "Pilloli" del calendario
+      dateOrdinate.forEach(dataStr => {
+        const d = new Date(dataStr);
+        // Formatta in "Lun 26 Ago"
+        const label = d.toLocaleDateString('it-IT', { weekday: 'short', day: 'numeric', month: 'short' });
+        
+        const pill = document.createElement('div');
+        pill.className = 'day-pill';
+        pill.innerText = label;
+        pill.onclick = () => loadDayView(dataStr, pill);
+        strip.appendChild(pill);
+      });
+
+      // Seleziona automaticamente l'ultimo giorno disponibile al caricamento
+      if (!activeDateStr || !storeGiorni[activeDateStr]) {
+        loadDayView(dateOrdinate[0], strip.firstChild);
+      } else {
+        // Mantiene la selezione se arrivano nuovi dati
+        const activeIdx = dateOrdinate.indexOf(activeDateStr);
+        loadDayView(activeDateStr, strip.children[activeIdx]);
       }
+    }
 
+    function loadDayView(dataStr, pillElement) {
+      activeDateStr = dataStr;
+      
+      // Aggiorna lo stile visivo del calendario
+      document.querySelectorAll('.day-pill').forEach(el => el.classList.remove('active'));
+      pillElement.classList.add('active');
+
+      const g = storeGiorni[dataStr];
+      document.getElementById('day-view').style.display = 'block';
+      
+      const d = new Date(dataStr);
+      document.getElementById('day-title').innerText = d.toLocaleDateString('it-IT', { weekday: 'long', day: 'numeric', month: 'long' });
+
+      // Calcola e inserisce le Medie Matematiche
+      document.getElementById('avg-acqua').innerText = (g.sumAcqua / g.count).toFixed(1) + "°";
+      document.getElementById('avg-aria').innerText = (g.sumAria / g.count).toFixed(1) + "°";
+      document.getElementById('avg-umidita').innerText = (g.sumHum / g.count).toFixed(0) + "%";
+
+      // Disegna o Aggiorna il Grafico
+      const ctx = document.getElementById('main-chart').getContext('2d');
+      if (mainChart) mainChart.destroy();
+      
+      mainChart = new Chart(ctx, {
+        type: 'line',
+        data: {
+          labels: g.letture.map(l => l.ora),
+          datasets: [
+            { label: 'Acqua (°C)', borderColor: '#0A84FF', data: g.letture.map(l => l.acqua), pointRadius: 0, tension: 0.4, borderWidth: 3 },
+            { label: 'Aria (°C)', borderColor: '#FF9F0A', data: g.letture.map(l => l.aria), pointRadius: 0, tension: 0.4, borderWidth: 3 }
+          ]
+        },
+        options: {
+          responsive: true,
+          interaction: { mode: 'index', intersect: false },
+          plugins: { legend: { display: false } },
+          scales: { x: { display: false }, y: { grid: { color: '#38383A' } } }
+        }
+      });
+    }
+
+    // --- AZIONI MANUALI ---
+    window.registraAzione = function(tipoAzione) {
+      if (!activeDateStr) return;
+      const now = new Date();
+      now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
+      const oraEsatta = now.toISOString().substring(11, 16);
+      
       push(ref(db, 'registri_manuali'), {
-        data_ora: dataOra.replace("T", " "),
-        ph: ph || "-",
-        ec: ec || "-",
-        acido: acido ? "Sì" : "No",
-        nutrienti: nutrienti ? "Sì" : "No"
+        data_ora: activeDateStr + " " + oraEsatta,
+        azione: tipoAzione
       }).then(() => {
-        document.getElementById('input-ph').value = "";
-        document.getElementById('input-ec').value = "";
-        document.getElementById('chk-acido').checked = false;
-        document.getElementById('chk-nutrienti').checked = false;
+        alert(tipoAzione + " registrato il " + activeDateStr + " alle " + oraEsatta);
       });
-    });
-
-    // --- TABELLA STORICO MANUALE ---
-    onValue(query(ref(db, 'registri_manuali'), limitToLast(50)), (snapshot) => {
-      const data = snapshot.val();
-      const table = document.getElementById('tabella-manuale');
-      table.innerHTML = "<tr><th>Data e Ora</th><th>pH</th><th>EC</th><th>Azioni Extra</th></tr>";
-      if (!data) return;
-
-      Object.values(data).forEach(row => {
-        let extra = [];
-        if (row.acido === "Sì") extra.push("💧 Acido");
-        if (row.nutrienti === "Sì") extra.push("🌿 Nutrienti");
-        
-        let newRow = table.insertRow(1);
-        newRow.innerHTML = `<td>${row.data_ora}</td><td>${row.ph}</td><td>${row.ec}</td><td>${extra.join(" + ") || "-"}</td>`;
-      });
-    });
-
-    // --- STORICO SENSORI E GRAFICO ---
-    const storicoRef = query(ref(db, 'storico'), limitToLast(100));
-    let chart = new Chart(document.getElementById('grafico'), {
-      type: 'line',
-      data: { labels: [], datasets: [
-        { label: 'Acqua (°C)', borderColor: '#36a2eb', data: [] },
-        { label: 'Aria (°C)', borderColor: '#ff6384', data: [] }
-      ]},
-      options: { animation: false }
-    });
-
-    onValue(storicoRef, (snapshot) => {
-      const data = snapshot.val();
-      if (!data) return;
-
-      const table = document.getElementById('tabella');
-      table.innerHTML = "<tr><th>Data e Ora</th><th>T. Acqua</th><th>T. Aria</th><th>Umidità</th><th>TDS (ppm)</th></tr>";
-      let labels = [], acqua = [], aria = [];
-
-      Object.values(data).forEach(row => {
-        labels.push(row.ora.substring(11, 16)); 
-        acqua.push(row.t_acqua);
-        aria.push(row.t_aria);
-        
-        let tdsStr = row.tds !== undefined ? parseFloat(row.tds).toFixed(0) + " ppm" : "-";
-        
-        let newRow = table.insertRow(1); 
-        newRow.innerHTML = `<td>${row.ora}</td><td>${parseFloat(row.t_acqua).toFixed(1)}°C</td><td>${parseFloat(row.t_aria).toFixed(1)}°C</td><td>${parseFloat(row.u_aria).toFixed(1)}%</td><td>${tdsStr}</td>`;
-      });
-
-      chart.data.labels = labels;
-      chart.data.datasets[0].data = acqua;
-      chart.data.datasets[1].data = aria;
-      chart.update();
-    });
+    }
+    
+    document.getElementById('btn-nutrienti').onclick = () => registraAzione('Nutrienti');
+    document.getElementById('btn-acido').onclick = () => registraAzione('Acido');
   </script>
 </body>
 </html>
