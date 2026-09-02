@@ -33,10 +33,11 @@
 
     .day-view { background: var(--card); border-radius: 16px; padding: 20px; display: none; }
     .day-title { font-size: 20px; font-weight: 700; margin-bottom: 15px; }
-    .averages-grid { display: flex; justify-content: space-between; margin-bottom: 20px; border-bottom: 1px solid #38383A; padding-bottom: 15px; }
+    
+    .averages-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 20px; border-bottom: 1px solid #38383A; padding-bottom: 15px; }
     .avg-item { text-align: center; }
-    .avg-val { font-size: 18px; font-weight: 700; }
-    .avg-lbl { font-size: 12px; color: var(--text-sec); text-transform: uppercase; margin-top: 4px; }
+    .avg-val { font-size: 17px; font-weight: 700; }
+    .avg-lbl { font-size: 11px; color: var(--text-sec); text-transform: uppercase; margin-top: 4px; }
     
     canvas { width: 100%; max-height: 280px; margin-bottom: 20px; }
     
@@ -72,9 +73,10 @@
     <div class="day-title" id="day-title">Seleziona un giorno</div>
     
     <div class="averages-grid">
-      <div class="avg-item"><div class="avg-val v-acqua" id="avg-acqua">--°</div><div class="avg-lbl">Media Acqua</div></div>
-      <div class="avg-item"><div class="avg-val v-aria" id="avg-aria">--°</div><div class="avg-lbl">Media Aria</div></div>
-      <div class="avg-item"><div class="avg-val v-umidita" id="avg-umidita">--%</div><div class="avg-lbl">Media Umidità</div></div>
+      <div class="avg-item"><div class="avg-val v-acqua" id="avg-acqua">--°</div><div class="avg-lbl">Media<br>Acqua</div></div>
+      <div class="avg-item"><div class="avg-val v-aria" id="avg-aria">--°</div><div class="avg-lbl">Media<br>Aria</div></div>
+      <div class="avg-item"><div class="avg-val v-umidita" id="avg-umidita">--%</div><div class="avg-lbl">Media<br>Umidità</div></div>
+      <div class="avg-item"><div class="avg-val v-ec" id="avg-ec">--</div><div class="avg-lbl">Media<br>EC</div></div>
     </div>
 
     <canvas id="main-chart"></canvas>
@@ -103,7 +105,7 @@
     let activeDateStr = "";
     let unsubscribeStorico = null; 
 
-    // --- TEMPO REALE ---
+    // --- TEMPO REALE CON CONTROLLO SCADENZA ---
     let offlineTimer;
     onValue(ref(db, 'stato'), (snapshot) => {
       const data = snapshot.val();
@@ -111,16 +113,35 @@
       document.getElementById('val-acqua').innerText = parseFloat(data.t_acqua).toFixed(1) + "°";
       document.getElementById('val-aria').innerText = parseFloat(data.t_aria).toFixed(1) + "°";
       document.getElementById('val-umidita').innerText = parseFloat(data.u_aria).toFixed(0) + "%";
-      
-      // Lettura del nuovo valore EC formattato a 2 decimali
       document.getElementById('val-ec').innerText = (data.ec !== undefined ? parseFloat(data.ec).toFixed(2) : "--") + " mS";
-      
       document.getElementById('last-update').innerText = "Aggiornato: " + data.ultimo_aggiornamento;
 
       const indic = document.getElementById('status-indicator');
-      indic.innerText = "ONLINE"; indic.className = "online";
+      
+      // LOGICA ANTI-ILLUSIONE: Calcoliamo l'età del dato ricevuto
+      // Sostituiamo lo spazio con la T (es. "2026-09-02T20:39:00") per farla leggere correttamente ai browser iOS
+      const dataStringa = data.ultimo_aggiornamento.replace(" ", "T");
+      const tempoDato = new Date(dataStringa).getTime();
+      const tempoAdesso = Date.now();
+      
+      const differenzaMillisecondi = tempoAdesso - tempoDato;
+
+      // Se il dato è più vecchio di 30 secondi, la centralina è offline!
+      if (differenzaMillisecondi > 30000) {
+        indic.innerText = "OFFLINE (Dato obsoleto)"; 
+        indic.className = "offline";
+      } else {
+        indic.innerText = "ONLINE"; 
+        indic.className = "online";
+      }
+
+      // Questo timer serve se la pagina rimane aperta: 
+      // se passano 15 secondi senza nuovi dati, passa a OFFLINE
       clearTimeout(offlineTimer);
-      offlineTimer = setTimeout(() => { indic.innerText = "OFFLINE"; indic.className = "offline"; }, 15000); 
+      offlineTimer = setTimeout(() => { 
+        indic.innerText = "OFFLINE"; 
+        indic.className = "offline"; 
+      }, 15000); 
     });
 
     // --- FILTRI MESE E ANNO ---
@@ -189,12 +210,13 @@
             const dataStr = row.ora.substring(0, 10);
             const oraStr = row.ora.substring(11, 16); 
             if (!storeGiorni[dataStr]) {
-              storeGiorni[dataStr] = { letture: [], sumAcqua: 0, sumAria: 0, sumHum: 0, count: 0 };
+              storeGiorni[dataStr] = { letture: [], sumAcqua: 0, sumAria: 0, sumHum: 0, sumEc: 0, count: 0 };
             }
             storeGiorni[dataStr].letture.push({ ora: oraStr, acqua: row.t_acqua, aria: row.t_aria });
-            storeGiorni[dataStr].sumAcqua += parseFloat(row.t_acqua);
-            storeGiorni[dataStr].sumAria += parseFloat(row.t_aria);
-            storeGiorni[dataStr].sumHum += parseFloat(row.u_aria);
+            storeGiorni[dataStr].sumAcqua += parseFloat(row.t_acqua || 0);
+            storeGiorni[dataStr].sumAria += parseFloat(row.t_aria || 0);
+            storeGiorni[dataStr].sumHum += parseFloat(row.u_aria || 0);
+            storeGiorni[dataStr].sumEc += parseFloat(row.ec || 0);
             storeGiorni[dataStr].count++;
           });
         }
@@ -247,6 +269,7 @@
       document.getElementById('avg-acqua').innerText = (g.sumAcqua / g.count).toFixed(1) + "°";
       document.getElementById('avg-aria').innerText = (g.sumAria / g.count).toFixed(1) + "°";
       document.getElementById('avg-umidita').innerText = (g.sumHum / g.count).toFixed(0) + "%";
+      document.getElementById('avg-ec').innerText = (g.sumEc / g.count).toFixed(2) + " mS";
 
       const ctx = document.getElementById('main-chart').getContext('2d');
       if (mainChart) mainChart.destroy();
