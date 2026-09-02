@@ -41,10 +41,17 @@
     
     canvas { width: 100%; max-height: 280px; margin-bottom: 20px; }
     
-    .action-row { display: flex; gap: 10px; }
+    .action-row { display: flex; gap: 10px; margin-bottom: 20px; }
     .btn { flex: 1; background: #2C2C2E; color: var(--blue); border: none; padding: 12px; border-radius: 12px; font-weight: 600; font-size: 15px; cursor: pointer; }
     .btn:active { background: #3A3A3C; }
     .btn.acid { color: var(--orange); }
+
+    /* Stile per la sezione Note (Nuova!) */
+    .note-section { border-top: 1px solid #38383A; padding-top: 20px; }
+    .note-title { font-size: 13px; font-weight: 600; color: var(--text-sec); text-transform: uppercase; margin-bottom: 10px; }
+    .note-textarea { width: 100%; background: #000000; color: var(--text); border: 1px solid #38383A; padding: 15px; border-radius: 12px; font-family: inherit; font-size: 15px; resize: vertical; min-height: 100px; margin-bottom: 12px; box-sizing: border-box; outline: none; transition: border 0.3s; }
+    .note-textarea:focus { border-color: var(--blue); }
+    .btn-note { background: var(--blue); color: #fff; width: 100%; }
   </style>
 </head>
 <body>
@@ -59,6 +66,7 @@
     <div class="card-mini"><div class="label">Acqua</div><div class="value v-acqua" id="val-acqua">--°</div></div>
     <div class="card-mini"><div class="label">Aria</div><div class="value v-aria" id="val-aria">--°</div></div>
     <div class="card-mini"><div class="label">Umidità</div><div class="value v-umidita" id="val-umidita">--%</div></div>
+    <!-- EC ora in µS -->
     <div class="card-mini"><div class="label">EC</div><div class="value v-ec" id="val-ec">--</div></div>
   </div>
 
@@ -76,6 +84,7 @@
       <div class="avg-item"><div class="avg-val v-acqua" id="avg-acqua">--°</div><div class="avg-lbl">Media<br>Acqua</div></div>
       <div class="avg-item"><div class="avg-val v-aria" id="avg-aria">--°</div><div class="avg-lbl">Media<br>Aria</div></div>
       <div class="avg-item"><div class="avg-val v-umidita" id="avg-umidita">--%</div><div class="avg-lbl">Media<br>Umidità</div></div>
+      <!-- Media EC in µS -->
       <div class="avg-item"><div class="avg-val v-ec" id="avg-ec">--</div><div class="avg-lbl">Media<br>EC</div></div>
     </div>
 
@@ -85,11 +94,19 @@
       <button class="btn" id="btn-nutrienti">🌿 + Nutrienti</button>
       <button class="btn acid" id="btn-acido">💧 + Acido</button>
     </div>
+
+    <!-- Nuova Sezione Note del Giorno -->
+    <div class="note-section">
+      <div class="note-title">Diario di Bordo</div>
+      <textarea id="day-note-input" class="note-textarea" placeholder="Scrivi qui potature, rabbocchi o osservazioni..."></textarea>
+      <button class="btn btn-note" id="btn-salva-nota">Salva Nota</button>
+    </div>
   </div>
 
+  <!-- Aggiunti set e get alle importazioni di Firebase -->
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-app.js";
-    import { getDatabase, ref, onValue, query, push, orderByChild, startAt, endAt } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-database.js";
+    import { getDatabase, ref, onValue, query, push, orderByChild, startAt, endAt, set, get } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-database.js";
 
     // INSERISCI QUI I TUOI DATI FIREBASE
     const firebaseConfig = {
@@ -113,21 +130,18 @@
       document.getElementById('val-acqua').innerText = parseFloat(data.t_acqua).toFixed(1) + "°";
       document.getElementById('val-aria').innerText = parseFloat(data.t_aria).toFixed(1) + "°";
       document.getElementById('val-umidita').innerText = parseFloat(data.u_aria).toFixed(0) + "%";
-      document.getElementById('val-ec').innerText = (data.ec !== undefined ? parseFloat(data.ec).toFixed(2) : "--") + " mS";
+      
+      // Valore EC convertito in µS, con toFixed(0) per i numeri interi
+      document.getElementById('val-ec').innerText = (data.ec !== undefined ? parseFloat(data.ec).toFixed(0) : "--") + " µS";
+      
       document.getElementById('last-update').innerText = "Aggiornato: " + data.ultimo_aggiornamento;
 
       const indic = document.getElementById('status-indicator');
-      
-      // LOGICA ANTI-ILLUSIONE: Calcoliamo l'età del dato ricevuto
-      // Sostituiamo lo spazio con la T (es. "2026-09-02T20:39:00") per farla leggere correttamente ai browser iOS
       const dataStringa = data.ultimo_aggiornamento.replace(" ", "T");
       const tempoDato = new Date(dataStringa).getTime();
       const tempoAdesso = Date.now();
       
-      const differenzaMillisecondi = tempoAdesso - tempoDato;
-
-      // Se il dato è più vecchio di 30 secondi, la centralina è offline!
-      if (differenzaMillisecondi > 30000) {
+      if ((tempoAdesso - tempoDato) > 30000) {
         indic.innerText = "OFFLINE (Dato obsoleto)"; 
         indic.className = "offline";
       } else {
@@ -135,8 +149,6 @@
         indic.className = "online";
       }
 
-      // Questo timer serve se la pagina rimane aperta: 
-      // se passano 15 secondi senza nuovi dati, passa a OFFLINE
       clearTimeout(offlineTimer);
       offlineTimer = setTimeout(() => { 
         indic.innerText = "OFFLINE"; 
@@ -266,11 +278,13 @@
       const d = new Date(dataStr);
       document.getElementById('day-title').innerText = d.toLocaleDateString('it-IT', { weekday: 'long', day: 'numeric', month: 'long' });
 
+      // Calcolo e inserimento delle medie (EC con toFixed(0) per i microSiemens interi)
       document.getElementById('avg-acqua').innerText = (g.sumAcqua / g.count).toFixed(1) + "°";
       document.getElementById('avg-aria').innerText = (g.sumAria / g.count).toFixed(1) + "°";
       document.getElementById('avg-umidita').innerText = (g.sumHum / g.count).toFixed(0) + "%";
-      document.getElementById('avg-ec').innerText = (g.sumEc / g.count).toFixed(2) + " mS";
+      document.getElementById('avg-ec').innerText = (g.sumEc / g.count).toFixed(0) + " µS";
 
+      // Disegna il grafico
       const ctx = document.getElementById('main-chart').getContext('2d');
       if (mainChart) mainChart.destroy();
       
@@ -301,9 +315,25 @@
           }
         }
       });
+
+      // --- LOGICA DIARIO DI BORDO (Fetch della nota) ---
+      const noteInput = document.getElementById('day-note-input');
+      noteInput.value = "Caricamento..."; // Testo provvisorio
+      
+      // Chiede al database se c'è una nota per la data selezionata (es. "note/2026-09-02")
+      get(ref(db, 'note/' + dataStr)).then((snapshot) => {
+        // Controlla che l'utente non abbia cambiato giorno nel frattempo
+        if (activeDateStr === dataStr) {
+          if (snapshot.exists()) {
+            noteInput.value = snapshot.val().testo;
+          } else {
+            noteInput.value = ""; // Lascia vuoto se non c'è nessuna nota
+          }
+        }
+      });
     }
 
-    // --- AZIONI MANUALI ---
+    // --- AZIONI MANUALI E SALVATAGGIO NOTE ---
     window.registraAzione = function(tipoAzione) {
       if (!activeDateStr) return;
       const now = new Date();
@@ -320,6 +350,25 @@
     
     document.getElementById('btn-nutrienti').onclick = () => registraAzione('Nutrienti');
     document.getElementById('btn-acido').onclick = () => registraAzione('Acido');
+
+    // Salvataggio della Nota
+    document.getElementById('btn-salva-nota').onclick = () => {
+      if (!activeDateStr) return;
+      const testoNota = document.getElementById('day-note-input').value;
+      
+      set(ref(db, 'note/' + activeDateStr), {
+        testo: testoNota
+      }).then(() => {
+        // Un piccolo feedback visivo per confermare il salvataggio
+        const btn = document.getElementById('btn-salva-nota');
+        btn.innerText = "✓ Salvato!";
+        btn.style.background = "#30D158"; // Verde iOS
+        setTimeout(() => {
+          btn.innerText = "Salva Nota";
+          btn.style.background = "#0A84FF"; // Torna Blu iOS
+        }, 2000);
+      });
+    }
 
     initFiltri();
   </script>
