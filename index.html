@@ -20,20 +20,17 @@
     .card-mini { background: var(--card); border-radius: 16px; padding: 16px; flex: 1; min-width: 130px; }
     .card-mini .label { color: var(--text-sec); font-size: 13px; font-weight: 600; margin-bottom: 8px; text-transform: uppercase; }
     .card-mini .value { font-size: 24px; font-weight: 700; }
-    .v-acqua { color: var(--blue); } .v-aria { color: var(--orange); } .v-umidita { color: var(--green); } .v-tds { color: var(--text); }
+    .v-acqua { color: var(--blue); } .v-aria { color: var(--orange); } .v-umidita { color: var(--green); } .v-ec { color: var(--text); }
 
-    /* Filtri Mese/Anno in stile iOS */
     .filter-row { display: flex; gap: 12px; margin-bottom: 15px; }
     .ios-select { background: var(--pill); color: var(--text); border: none; padding: 12px 16px; border-radius: 12px; font-size: 16px; font-weight: 600; outline: none; -webkit-appearance: none; appearance: none; flex: 1; text-align: center; cursor: pointer; }
     
-    /* Calendario a Scorrimento Orizzontale (Swipe) */
     .calendar-strip { display: flex; overflow-x: auto; gap: 10px; padding-bottom: 10px; margin-bottom: 20px; scroll-behavior: smooth; -webkit-overflow-scrolling: touch; }
     .calendar-strip::-webkit-scrollbar { display: none; }
     .day-pill { background: var(--pill); color: var(--text-sec); padding: 10px 16px; border-radius: 20px; font-size: 14px; font-weight: 600; white-space: nowrap; cursor: pointer; transition: all 0.2s; }
     .day-pill.active { background: var(--text); color: var(--bg); }
     .no-data { color: var(--text-sec); font-size: 15px; padding: 10px; text-align: center; width: 100%; }
 
-    /* Vista Giorno Singolo */
     .day-view { background: var(--card); border-radius: 16px; padding: 20px; display: none; }
     .day-title { font-size: 20px; font-weight: 700; margin-bottom: 15px; }
     .averages-grid { display: flex; justify-content: space-between; margin-bottom: 20px; border-bottom: 1px solid #38383A; padding-bottom: 15px; }
@@ -41,7 +38,6 @@
     .avg-val { font-size: 18px; font-weight: 700; }
     .avg-lbl { font-size: 12px; color: var(--text-sec); text-transform: uppercase; margin-top: 4px; }
     
-    /* Aumentata l'altezza del grafico per fare spazio all'asse degli orari */
     canvas { width: 100%; max-height: 280px; margin-bottom: 20px; }
     
     .action-row { display: flex; gap: 10px; }
@@ -62,7 +58,7 @@
     <div class="card-mini"><div class="label">Acqua</div><div class="value v-acqua" id="val-acqua">--°</div></div>
     <div class="card-mini"><div class="label">Aria</div><div class="value v-aria" id="val-aria">--°</div></div>
     <div class="card-mini"><div class="label">Umidità</div><div class="value v-umidita" id="val-umidita">--%</div></div>
-    <div class="card-mini"><div class="label">TDS</div><div class="value v-tds" id="val-tds">--</div></div>
+    <div class="card-mini"><div class="label">EC</div><div class="value v-ec" id="val-ec">--</div></div>
   </div>
 
   <div class="filter-row">
@@ -81,7 +77,6 @@
       <div class="avg-item"><div class="avg-val v-umidita" id="avg-umidita">--%</div><div class="avg-lbl">Media Umidità</div></div>
     </div>
 
-    <!-- Il Grafico Dettagliato ogni 15 min -->
     <canvas id="main-chart"></canvas>
 
     <div class="action-row">
@@ -116,7 +111,10 @@
       document.getElementById('val-acqua').innerText = parseFloat(data.t_acqua).toFixed(1) + "°";
       document.getElementById('val-aria').innerText = parseFloat(data.t_aria).toFixed(1) + "°";
       document.getElementById('val-umidita').innerText = parseFloat(data.u_aria).toFixed(0) + "%";
-      document.getElementById('val-tds').innerText = (data.tds !== undefined ? parseFloat(data.tds).toFixed(0) : "--") + " ppm";
+      
+      // Lettura del nuovo valore EC formattato a 2 decimali
+      document.getElementById('val-ec').innerText = (data.ec !== undefined ? parseFloat(data.ec).toFixed(2) : "--") + " mS";
+      
       document.getElementById('last-update').innerText = "Aggiornato: " + data.ultimo_aggiornamento;
 
       const indic = document.getElementById('status-indicator');
@@ -189,7 +187,7 @@
         if (data) {
           Object.values(data).forEach(row => {
             const dataStr = row.ora.substring(0, 10);
-            const oraStr = row.ora.substring(11, 16); // Formato orario 15:30
+            const oraStr = row.ora.substring(11, 16); 
             if (!storeGiorni[dataStr]) {
               storeGiorni[dataStr] = { letture: [], sumAcqua: 0, sumAria: 0, sumHum: 0, count: 0 };
             }
@@ -234,7 +232,6 @@
       }
     }
 
-    // --- VISTA GIORNALIERA E GRAFICO ---
     function loadDayView(dataStr, pillElement) {
       activeDateStr = dataStr;
       
@@ -247,7 +244,6 @@
       const d = new Date(dataStr);
       document.getElementById('day-title').innerText = d.toLocaleDateString('it-IT', { weekday: 'long', day: 'numeric', month: 'long' });
 
-      // Inserisce le Medie nei riquadri
       document.getElementById('avg-acqua').innerText = (g.sumAcqua / g.count).toFixed(1) + "°";
       document.getElementById('avg-aria').innerText = (g.sumAria / g.count).toFixed(1) + "°";
       document.getElementById('avg-umidita').innerText = (g.sumHum / g.count).toFixed(0) + "%";
@@ -255,7 +251,6 @@
       const ctx = document.getElementById('main-chart').getContext('2d');
       if (mainChart) mainChart.destroy();
       
-      // Costruisce il grafico con asse del tempo (15 min) e tooltip interattivo
       mainChart = new Chart(ctx, {
         type: 'line',
         data: {
@@ -278,16 +273,8 @@
             }
           },
           scales: { 
-            x: { 
-              display: true, // Adesso l'asse delle ore si vede!
-              grid: { display: false },
-              ticks: { color: '#8E8E93', maxTicksLimit: 8 } 
-            }, 
-            y: { 
-              display: true,
-              grid: { color: '#38383A' },
-              ticks: { color: '#8E8E93' }
-            } 
+            x: { display: true, grid: { display: false }, ticks: { color: '#8E8E93', maxTicksLimit: 8 } }, 
+            y: { display: true, grid: { color: '#38383A' }, ticks: { color: '#8E8E93' } } 
           }
         }
       });
