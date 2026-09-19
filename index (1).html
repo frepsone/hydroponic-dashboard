@@ -1,0 +1,607 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+  <title>Hydroponic iOS</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    :root { --bg: #000000; --card: #1C1C1E; --text: #FFFFFF; --text-sec: #8E8E93; --green: #30D158; --blue: #0A84FF; --orange: #FF9F0A; --red: #FF453A; --pill: #2C2C2E; }
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background: var(--bg); color: var(--text); margin: 0; padding: 20px; padding-bottom: 50px; }
+    h1 { font-size: 28px; font-weight: 700; margin-bottom: 20px; letter-spacing: 0.5px; }
+    
+    .status-box { background: var(--card); padding: 16px; border-radius: 16px; margin-bottom: 24px; font-weight: 600; font-size: 15px; }
+    .status-box span { font-weight: 700; }
+    .online { color: var(--green); }
+    .offline { color: var(--red); }
+    .update-time { font-size: 13px; color: var(--text-sec); font-weight: 400; margin-top: 6px; }
+
+    .grid { display: flex; gap: 12px; margin-bottom: 30px; flex-wrap: wrap; }
+    .card-mini { background: var(--card); border-radius: 16px; padding: 16px; flex: 1; min-width: 130px; }
+    .card-mini .label { color: var(--text-sec); font-size: 13px; font-weight: 600; margin-bottom: 8px; text-transform: uppercase; }
+    .card-mini .value { font-size: 24px; font-weight: 700; }
+    .v-acqua { color: var(--blue); } .v-aria { color: var(--orange); } .v-umidita { color: var(--green); } .v-ec { color: var(--text); }
+
+    .filter-row { display: flex; gap: 12px; margin-bottom: 15px; }
+    .ios-select { background: var(--pill); color: var(--text); border: none; padding: 12px 16px; border-radius: 12px; font-size: 16px; font-weight: 600; outline: none; -webkit-appearance: none; appearance: none; flex: 1; text-align: center; cursor: pointer; }
+    
+    .calendar-strip { display: flex; overflow-x: auto; gap: 10px; padding-bottom: 10px; margin-bottom: 20px; scroll-behavior: smooth; -webkit-overflow-scrolling: touch; }
+    .calendar-strip::-webkit-scrollbar { display: none; }
+    .day-pill { background: var(--pill); color: var(--text-sec); padding: 10px 16px; border-radius: 20px; font-size: 14px; font-weight: 600; white-space: nowrap; cursor: pointer; transition: all 0.2s; }
+    .day-pill.active { background: var(--text); color: var(--bg); }
+    .no-data { color: var(--text-sec); font-size: 15px; padding: 10px; text-align: center; width: 100%; }
+
+    .day-view { background: var(--card); border-radius: 16px; padding: 20px; display: none; }
+    .day-title { font-size: 20px; font-weight: 700; margin-bottom: 15px; }
+    
+    .averages-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 20px; border-bottom: 1px solid #38383A; padding-bottom: 15px; }
+    .avg-item { text-align: center; }
+    .avg-val { font-size: 17px; font-weight: 700; }
+    .avg-lbl { font-size: 11px; color: var(--text-sec); text-transform: uppercase; margin-top: 4px; }
+    
+    canvas { width: 100%; max-height: 280px; margin-bottom: 20px; }
+    
+    .action-row { display: flex; gap: 10px; margin-bottom: 20px; }
+    .btn { flex: 1; background: #2C2C2E; color: var(--blue); border: none; padding: 12px; border-radius: 12px; font-weight: 600; font-size: 15px; cursor: pointer; }
+    .btn:active { background: #3A3A3C; }
+    .btn.acid { color: var(--orange); }
+
+    .calculator-section { background: #121212; border-radius: 14px; padding: 15px; margin-bottom: 20px; border: 1px solid #38383A; }
+    .calc-title { font-size: 14px; font-weight: 700; color: var(--text-sec); text-transform: uppercase; margin-bottom: 12px; letter-spacing: 0.05em; }
+    .calc-row { display: flex; gap: 10px; margin-bottom: 10px; }
+    .calc-group { flex: 1; }
+    .calc-label { font-size: 11px; color: var(--text-sec); margin-bottom: 4px; display: block; }
+    .calc-input { width: 100%; background: #1C1C1E; color: var(--text); border: 1px solid #38383A; border-radius: 10px; padding: 10px; font-size: 15px; box-sizing: border-box; outline: none; text-align: center; }
+    .calc-result-box { background: #1C1C1E; border-radius: 10px; padding: 12px; display: flex; justify-content: space-between; align-items: center; margin-top: 10px; }
+    .calc-result-text { font-size: 14px; color: var(--text); }
+    .calc-result-val { font-size: 18px; font-weight: 700; color: var(--green); }
+    .btn-use-dose { background: var(--green); color: #000; padding: 8px 12px; border-radius: 8px; font-size: 13px; font-weight: 700; border: none; cursor: pointer; }
+
+    .modal-overlay {
+      position: fixed; inset: 0; background: rgba(0,0,0,0.6); display: none; align-items: end; justify-content: center; z-index: 50;
+    }
+    .modal-overlay.show { display: flex; }
+    .modal-sheet {
+      width: min(100%, 420px); background: #1C1C1E; border-radius: 20px 20px 0 0; padding: 20px 18px 18px; box-shadow: 0 -10px 30px rgba(0,0,0,0.25);
+    }
+    .modal-title { font-size: 18px; font-weight: 700; margin-bottom: 14px; }
+    .modal-label { color: var(--text-sec); font-size: 12px; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 8px; }
+    .modal-select, .modal-input {
+      width: 100%; background: #000000; color: var(--text); border: 1px solid #38383A; border-radius: 12px; padding: 14px 12px; box-sizing: border-box; font-size: 16px; margin-bottom: 16px; outline: none;
+    }
+    .modal-actions { display: flex; gap: 10px; }
+    .modal-actions .btn { flex: 1; }
+    .modal-actions .btn.cancel { background: #2C2C2E; color: var(--text); }
+    .modal-input.hidden { display: none; }
+
+    /* Stile per la sezione Note (Nuova!) */
+    .note-section { border-top: 1px solid #38383A; padding-top: 20px; }
+    .note-title { font-size: 13px; font-weight: 600; color: var(--text-sec); text-transform: uppercase; margin-bottom: 10px; }
+    .note-textarea { width: 100%; background: #000000; color: var(--text); border: 1px solid #38383A; padding: 15px; border-radius: 12px; font-family: inherit; font-size: 15px; resize: vertical; min-height: 100px; margin-bottom: 12px; box-sizing: border-box; outline: none; transition: border 0.3s; }
+    .note-textarea:focus { border-color: var(--blue); }
+    .btn-note { background: var(--blue); color: #fff; width: 100%; }
+  </style>
+</head>
+<body>
+  <h1>Riepilogo</h1>
+  
+  <div class="status-box">
+    Stato Sistema: <span id="status-indicator" class="offline">IN ATTESA...</span>
+    <div class="update-time" id="last-update">Ultimo contatto: --</div>
+  </div>
+
+  <div class="grid">
+    <div class="card-mini"><div class="label">Acqua</div><div class="value v-acqua" id="val-acqua">--°</div></div>
+    <div class="card-mini"><div class="label">Aria</div><div class="value v-aria" id="val-aria">--°</div></div>
+    <div class="card-mini"><div class="label">Umidità</div><div class="value v-umidita" id="val-umidita">--%</div></div>
+    <!-- EC ora in µS -->
+    <div class="card-mini"><div class="label">EC</div><div class="value v-ec" id="val-ec">--</div></div>
+  </div>
+
+  <div class="filter-row">
+    <select id="month-select" class="ios-select"></select>
+    <select id="year-select" class="ios-select"></select>
+  </div>
+
+  <div class="calendar-strip" id="calendar-strip"></div>
+
+  <div class="day-view" id="day-view">
+    <div class="day-title" id="day-title">Seleziona un giorno</div>
+    
+    <div class="averages-grid">
+      <div class="avg-item"><div class="avg-val v-acqua" id="avg-acqua">--°</div><div class="avg-lbl">Media<br>Acqua</div></div>
+      <div class="avg-item"><div class="avg-val v-aria" id="avg-aria">--°</div><div class="avg-lbl">Media<br>Aria</div></div>
+      <div class="avg-item"><div class="avg-val v-umidita" id="avg-umidita">--%</div><div class="avg-lbl">Media<br>Umidità</div></div>
+      <!-- Media EC in µS -->
+      <div class="avg-item"><div class="avg-val v-ec" id="avg-ec">--</div><div class="avg-lbl">Media<br>EC</div></div>
+    </div>
+
+    <canvas id="main-chart"></canvas>
+
+    <div class="action-row">
+      <button class="btn" id="btn-nutrienti">🌿 + Nutrienti</button>
+      <button class="btn acid" id="btn-acido">💧 + Acido</button>
+    </div>
+
+    <div class="calculator-section">
+      <div class="calc-title">🧪 Assistente Dosi</div>
+      <div class="calc-row">
+        <div class="calc-group">
+          <label class="calc-label">EC Target (µS)</label>
+          <input type="number" id="calc-target-ec" class="calc-input" placeholder="Es: 1200" min="0">
+        </div>
+        <div class="calc-group">
+          <label class="calc-label">pH Target</label>
+          <input type="number" id="calc-target-ph" class="calc-input" value="6.2" min="3" max="8" step="0.1">
+        </div>
+        <div class="calc-group">
+          <label class="calc-label">Litri Serbatoio</label>
+          <input type="number" id="calc-litri" class="calc-input" value="50" min="1">
+        </div>
+      </div>
+      <div class="calc-result-box">
+        <div>
+          <div class="calc-result-text">Stima consigliata:</div>
+          <div class="calc-result-val" id="calc-risultato">--</div>
+        </div>
+        <button class="btn-use-dose" id="btn-applica-dose">Usa dose</button>
+      </div>
+    </div>
+
+    <div class="modal-overlay" id="quantity-modal" aria-hidden="true">
+      <div class="modal-sheet">
+        <div class="modal-title" id="modal-title">Aggiungi prodotto</div>
+        <div class="modal-label">Quantità</div>
+        <select id="quantity-select" class="modal-select">
+          <option value="25">25 ml</option>
+          <option value="50">50 ml</option>
+          <option value="100" selected>100 ml</option>
+          <option value="150">150 ml</option>
+          <option value="200">200 ml</option>
+          <option value="250">250 ml</option>
+          <option value="500">500 ml</option>
+          <option value="custom">Personalizzata</option>
+        </select>
+        <input id="custom-quantity" class="modal-input hidden" type="number" min="1" step="1" placeholder="Inserisci ml personalizzati" />
+        <div class="modal-actions">
+          <button class="btn cancel" id="btn-cancel-action">Annulla</button>
+          <button class="btn" id="btn-confirm-action">Conferma</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Nuova Sezione Note del Giorno -->
+    <div class="note-section">
+      <div class="note-title">Diario di Bordo</div>
+      <textarea id="day-note-input" class="note-textarea" placeholder="Scrivi qui potature, rabbocchi o osservazioni..."></textarea>
+      <button class="btn btn-note" id="btn-salva-nota">Salva Nota</button>
+    </div>
+  </div>
+
+  <!-- Aggiunti set e get alle importazioni di Firebase -->
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-app.js";
+    import { getDatabase, ref, onValue, query, push, orderByChild, startAt, endAt, set, get } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-database.js";
+
+    // INSERISCI QUI I TUOI DATI FIREBASE
+    const firebaseConfig = {
+      apiKey: "AIzaSyDTNX50TvZb-8Q7jcg8KxDyymJ8v0TY1_0",
+      databaseURL: "https://hydrostradellazzo-default-rtdb.europe-west1.firebasedatabase.app"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const db = getDatabase(app);
+    
+    let mainChart = null;
+    let storeGiorni = {}; 
+    let activeDateStr = "";
+    let unsubscribeStorico = null; 
+    let ultimoEcCorrente = 0;
+    let ultimoPhCorrente = 6.2;
+
+    // --- TEMPO REALE CON CONTROLLO SCADENZA ---
+    function parseTimestampValido(value) {
+      if (!value) return null;
+
+      const testo = String(value).trim();
+      if (!testo) return null;
+
+      const candidate = testo.includes('T') ? testo : testo.replace(' ', 'T');
+      const tempo = new Date(candidate).getTime();
+      return Number.isFinite(tempo) ? tempo : null;
+    }
+
+    let offlineTimer;
+    onValue(ref(db, 'stato'), (snapshot) => {
+      const data = snapshot.val();
+      if (!data) return;
+      document.getElementById('val-acqua').innerText = parseFloat(data.t_acqua).toFixed(1) + "°";
+      document.getElementById('val-aria').innerText = parseFloat(data.t_aria).toFixed(1) + "°";
+      document.getElementById('val-umidita').innerText = parseFloat(data.u_aria).toFixed(0) + "%";
+      
+      ultimoEcCorrente = data.ec !== undefined ? parseFloat(data.ec) : 0;
+      document.getElementById('val-ec').innerText = (ultimoEcCorrente > 0 ? ultimoEcCorrente.toFixed(0) : "--") + " µS";
+
+      const phVal = data.ph !== undefined ? parseFloat(data.ph) : (data.pH !== undefined ? parseFloat(data.pH) : 6.2);
+      ultimoPhCorrente = Number.isFinite(phVal) ? phVal : 6.2;
+      
+      document.getElementById('last-update').innerText = "Aggiornato: " + (data.ultimo_aggiornamento || "--");
+
+      const indic = document.getElementById('status-indicator');
+      const tempoDato = parseTimestampValido(data.ultimo_aggiornamento);
+      const tempoAdesso = Date.now();
+      const tolleranzaFuturo = 5 * 60 * 1000;
+
+      if (tempoDato === null) {
+        indic.innerText = "OROLOGIO/TS NON VALIDO";
+        indic.className = "offline";
+        clearTimeout(offlineTimer);
+        return;
+      }
+
+      if ((tempoDato - tempoAdesso) > tolleranzaFuturo) {
+        indic.innerText = "OROLOGIO NON ALLINEATO / FUTURO";
+        indic.className = "offline";
+      } else if ((tempoAdesso - tempoDato) > 30000) {
+        indic.innerText = "OFFLINE (Dato obsoleto)"; 
+        indic.className = "offline";
+      } else {
+        indic.innerText = "ONLINE"; 
+        indic.className = "online";
+      }
+
+      clearTimeout(offlineTimer);
+      offlineTimer = setTimeout(() => { 
+        indic.innerText = "OFFLINE"; 
+        indic.className = "offline"; 
+      }, 15000); 
+    });
+
+    // --- FILTRI MESE E ANNO ---
+    const monthSelect = document.getElementById('month-select');
+    const yearSelect = document.getElementById('year-select');
+
+    function initFiltri() {
+      const now = new Date();
+      let currYear = now.getFullYear();
+      let currMonth = String(now.getMonth() + 1).padStart(2, '0');
+
+      for(let y = 2026; y <= currYear; y++) {
+        let opt = document.createElement('option');
+        opt.value = y; opt.text = y;
+        yearSelect.appendChild(opt);
+      }
+      yearSelect.value = currYear;
+
+      aggiornaMesiDisponibili();
+      monthSelect.value = currMonth;
+
+      yearSelect.addEventListener('change', () => { aggiornaMesiDisponibili(); caricaDatiMese(); });
+      monthSelect.addEventListener('change', () => { caricaDatiMese(); });
+      
+      caricaDatiMese();
+    }
+
+    function aggiornaMesiDisponibili() {
+      const selectedYear = parseInt(yearSelect.value);
+      const mesi = ["Gennaio", "Febbraio", "Marzo", "Aprile", "Maggio", "Giugno", "Luglio", "Agosto", "Settembre", "Ottobre", "Novembre", "Dicembre"];
+      const currentVal = monthSelect.value;
+      monthSelect.innerHTML = "";
+      
+      for(let i = 0; i < 12; i++) {
+        if(selectedYear === 2026 && i < 7) continue; 
+        
+        let mNum = String(i + 1).padStart(2, '0');
+        let opt = document.createElement('option');
+        opt.value = mNum; opt.text = mesi[i];
+        monthSelect.appendChild(opt);
+      }
+      
+      if([...monthSelect.options].some(o => o.value === currentVal)) {
+        monthSelect.value = currentVal;
+      } else {
+        monthSelect.selectedIndex = monthSelect.options.length - 1;
+      }
+    }
+
+    // --- CARICAMENTO STORICO ---
+    function caricaDatiMese() {
+      if(unsubscribeStorico) unsubscribeStorico(); 
+
+      const anno = yearSelect.value;
+      const mese = monthSelect.value;
+      const prefissoRicerca = `${anno}-${mese}`;
+
+      const queryMese = query(ref(db, 'storico'), orderByChild('ora'), startAt(prefissoRicerca), endAt(prefissoRicerca + '\uf8ff'));
+
+      unsubscribeStorico = onValue(queryMese, (snapshot) => {
+        const data = snapshot.val();
+        storeGiorni = {};
+        
+        if (data) {
+          Object.values(data).forEach(row => {
+            const dataStr = row.ora.substring(0, 10);
+            const oraStr = row.ora.substring(11, 16); 
+            if (!storeGiorni[dataStr]) {
+              storeGiorni[dataStr] = { letture: [], sumAcqua: 0, sumAria: 0, sumHum: 0, sumEc: 0, count: 0 };
+            }
+            storeGiorni[dataStr].letture.push({ ora: oraStr, acqua: row.t_acqua, aria: row.t_aria });
+            storeGiorni[dataStr].sumAcqua += parseFloat(row.t_acqua || 0);
+            storeGiorni[dataStr].sumAria += parseFloat(row.t_aria || 0);
+            storeGiorni[dataStr].sumHum += parseFloat(row.u_aria || 0);
+            storeGiorni[dataStr].sumEc += parseFloat(row.ec || 0);
+            storeGiorni[dataStr].count++;
+          });
+        }
+        renderCalendarStrip();
+      });
+    }
+
+    function renderCalendarStrip() {
+      const strip = document.getElementById('calendar-strip');
+      strip.innerHTML = "";
+      const dateOrdinate = Object.keys(storeGiorni).sort().reverse();
+      
+      if (dateOrdinate.length === 0) {
+        document.getElementById('day-view').style.display = 'none';
+        strip.innerHTML = '<div class="no-data">Nessun dato in questo mese. 📭</div>';
+        return;
+      }
+
+      dateOrdinate.forEach(dataStr => {
+        const d = new Date(dataStr);
+        const label = d.toLocaleDateString('it-IT', { weekday: 'short', day: 'numeric', month: 'short' });
+        
+        const pill = document.createElement('div');
+        pill.className = 'day-pill';
+        pill.innerText = label;
+        pill.onclick = () => loadDayView(dataStr, pill);
+        strip.appendChild(pill);
+      });
+
+      if (!activeDateStr || !storeGiorni[activeDateStr]) {
+        loadDayView(dateOrdinate[0], strip.firstChild);
+      } else {
+        const activeIdx = dateOrdinate.indexOf(activeDateStr);
+        loadDayView(activeDateStr, strip.children[activeIdx]);
+      }
+    }
+
+    function loadDayView(dataStr, pillElement) {
+      activeDateStr = dataStr;
+      
+      document.querySelectorAll('.day-pill').forEach(el => el.classList.remove('active'));
+      pillElement.classList.add('active');
+
+      const g = storeGiorni[dataStr];
+      document.getElementById('day-view').style.display = 'block';
+      
+      const d = new Date(dataStr);
+      document.getElementById('day-title').innerText = d.toLocaleDateString('it-IT', { weekday: 'long', day: 'numeric', month: 'long' });
+
+      // Calcolo e inserimento delle medie (EC con toFixed(0) per i microSiemens interi)
+      document.getElementById('avg-acqua').innerText = (g.sumAcqua / g.count).toFixed(1) + "°";
+      document.getElementById('avg-aria').innerText = (g.sumAria / g.count).toFixed(1) + "°";
+      document.getElementById('avg-umidita').innerText = (g.sumHum / g.count).toFixed(0) + "%";
+      document.getElementById('avg-ec').innerText = (g.sumEc / g.count).toFixed(0) + " µS";
+
+      // Disegna il grafico
+      const ctx = document.getElementById('main-chart').getContext('2d');
+      if (mainChart) mainChart.destroy();
+      
+      mainChart = new Chart(ctx, {
+        type: 'line',
+        data: {
+          labels: g.letture.map(l => l.ora),
+          datasets: [
+            { label: 'Acqua', borderColor: '#0A84FF', data: g.letture.map(l => l.acqua), pointRadius: 0, tension: 0.4, borderWidth: 3 },
+            { label: 'Aria', borderColor: '#FF9F0A', data: g.letture.map(l => l.aria), pointRadius: 0, tension: 0.4, borderWidth: 3 }
+          ]
+        },
+        options: {
+          responsive: true,
+          interaction: { mode: 'index', intersect: false },
+          plugins: { 
+            legend: { display: false },
+            tooltip: {
+              callbacks: {
+                title: function(context) { return 'Ore ' + context[0].label; },
+                label: function(context) { return context.dataset.label + ': ' + context.parsed.y + '°C'; }
+              }
+            }
+          },
+          scales: { 
+            x: { display: true, grid: { display: false }, ticks: { color: '#8E8E93', maxTicksLimit: 8 } }, 
+            y: { display: true, grid: { color: '#38383A' }, ticks: { color: '#8E8E93' } } 
+          }
+        }
+      });
+
+      // --- LOGICA DIARIO DI BORDO (Fetch della nota) ---
+      const noteInput = document.getElementById('day-note-input');
+      noteInput.value = "Caricamento..."; // Testo provvisorio
+      
+      // Chiede al database se c'è una nota per la data selezionata (es. "note/2026-09-02")
+      get(ref(db, 'note/' + dataStr)).then((snapshot) => {
+        // Controlla che l'utente non abbia cambiato giorno nel frattempo
+        if (activeDateStr === dataStr) {
+          if (snapshot.exists()) {
+            noteInput.value = snapshot.val().testo;
+          } else {
+            noteInput.value = ""; // Lascia vuoto se non c'è nessuna nota
+          }
+        }
+      });
+
+      calcolaDoseConsigliata();
+    }
+
+    // --- LOGICA CALCOLATORE DOSI ---
+    const inputLitri = document.getElementById('calc-litri');
+    const inputTargetEc = document.getElementById('calc-target-ec');
+    const inputTargetPh = document.getElementById('calc-target-ph');
+    const spanRisultato = document.getElementById('calc-risultato');
+    let mlStimatiGlobali = 0;
+    let mlPhStimatiGlobali = 0;
+    let direzionePh = "OK";
+
+    function calcolaDoseConsigliata() {
+      const litri = parseFloat(inputLitri.value) || 0;
+      const targetEc = parseFloat(inputTargetEc.value) || 0;
+      const targetPh = parseFloat(inputTargetPh.value) || 0;
+
+      let testoNutrienti = "Nutrienti: 0 ml";
+      let testoPh = "pH: OK";
+      mlStimatiGlobali = 0;
+      mlPhStimatiGlobali = 0;
+      direzionePh = "OK";
+
+      if (litri > 0 && targetEc > 0 && ultimoEcCorrente < targetEc) {
+        const deltaEc = targetEc - ultimoEcCorrente;
+        const mlCalcolati = Math.round((deltaEc / 100) * (litri * 0.15));
+        mlStimatiGlobali = mlCalcolati > 0 ? mlCalcolati : 0;
+        testoNutrienti = "Nutrienti: " + mlStimatiGlobali + " ml";
+      }
+
+      if (litri > 0 && targetPh > 0) {
+        const deltaPh = targetPh - ultimoPhCorrente;
+        const differenzaAbs = Math.abs(deltaPh);
+
+        if (differenzaAbs > 0.05) {
+          mlPhStimatiGlobali = Math.max(1, Math.round(differenzaAbs * litri * 8));
+          if (deltaPh > 0) {
+            direzionePh = "pH UP: " + mlPhStimatiGlobali + " ml";
+          } else {
+            direzionePh = "pH DOWN: " + mlPhStimatiGlobali + " ml";
+          }
+          testoPh = direzionePh;
+        }
+      }
+
+      spanRisultato.innerText = testoNutrienti + " • " + testoPh;
+    }
+
+    inputLitri.addEventListener('input', calcolaDoseConsigliata);
+    inputTargetEc.addEventListener('input', calcolaDoseConsigliata);
+    inputTargetPh.addEventListener('input', calcolaDoseConsigliata);
+
+    document.getElementById('btn-applica-dose').onclick = () => {
+      if (mlStimatiGlobali <= 0 && mlPhStimatiGlobali <= 0) {
+        alert("Inserisci valori validi per EC e/o pH per ottenere una stima di dosaggio.");
+        return;
+      }
+      mostraModalAzione('Nutrienti', mlStimatiGlobali > 0 ? mlStimatiGlobali : Math.max(10, mlPhStimatiGlobali));
+    };
+
+    // --- AZIONI MANUALI E SALVATAGGIO NOTE ---
+    const quantityModal = document.getElementById('quantity-modal');
+    const modalTitle = document.getElementById('modal-title');
+    const quantitySelect = document.getElementById('quantity-select');
+    const customQuantityInput = document.getElementById('custom-quantity');
+    let azioneSelezionata = null;
+
+    function mostraModalAzione(tipoAzione, valorePreimpostato = null) {
+      azioneSelezionata = tipoAzione;
+      modalTitle.innerText = tipoAzione === 'Nutrienti' ? 'Aggiungi nutrienti' : 'Aggiungi acido';
+      
+      if (valorePreimpostato !== null) {
+        quantitySelect.value = 'custom';
+        customQuantityInput.classList.remove('hidden');
+        customQuantityInput.value = valorePreimpostato;
+      } else {
+        quantitySelect.value = '100';
+        customQuantityInput.value = '';
+        customQuantityInput.classList.add('hidden');
+      }
+
+      quantityModal.classList.add('show');
+      quantityModal.setAttribute('aria-hidden', 'false');
+    }
+
+    function chiudiModalAzione() {
+      quantityModal.classList.remove('show');
+      quantityModal.setAttribute('aria-hidden', 'true');
+      azioneSelezionata = null;
+    }
+
+    quantitySelect.addEventListener('change', () => {
+      const isCustom = quantitySelect.value === 'custom';
+      customQuantityInput.classList.toggle('hidden', !isCustom);
+      if (isCustom) {
+        customQuantityInput.focus();
+      }
+    });
+
+    document.getElementById('btn-cancel-action').onclick = chiudiModalAzione;
+    quantityModal.onclick = (event) => {
+      if (event.target === quantityModal) chiudiModalAzione();
+    };
+
+    document.getElementById('btn-confirm-action').onclick = () => {
+      if (!activeDateStr || !azioneSelezionata) return;
+
+      let quantita = Number(quantitySelect.value);
+      if (quantitySelect.value === 'custom') {
+        quantita = Number(customQuantityInput.value);
+      }
+
+      if (!Number.isFinite(quantita) || quantita <= 0) {
+        alert('Inserisci una quantità valida in ml.');
+        return;
+      }
+
+      const now = new Date();
+      now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
+      const oraEsatta = now.toISOString().substring(11, 16);
+
+      push(ref(db, 'registri_manuali'), {
+        data_ora: activeDateStr + " " + oraEsatta,
+        azione: azioneSelezionata,
+        quantita_ml: quantita
+      }).then(() => {
+        alert(azioneSelezionata + ' registrato: ' + quantita + ' ml il ' + activeDateStr + ' alle ' + oraEsatta);
+        chiudiModalAzione();
+      });
+    };
+
+    window.registraAzione = function(tipoAzione, quantita = 0) {
+      if (!activeDateStr) return;
+      const now = new Date();
+      now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
+      const oraEsatta = now.toISOString().substring(11, 16);
+      
+      push(ref(db, 'registri_manuali'), {
+        data_ora: activeDateStr + " " + oraEsatta,
+        azione: tipoAzione,
+        quantita_ml: quantita
+      }).then(() => {
+        alert(tipoAzione + " registrato il " + activeDateStr + " alle " + oraEsatta + " (" + quantita + " ml)");
+      });
+    }
+    
+    document.getElementById('btn-nutrienti').onclick = () => mostraModalAzione('Nutrienti');
+    document.getElementById('btn-acido').onclick = () => mostraModalAzione('Acido');
+
+    // Salvataggio della Nota
+    document.getElementById('btn-salva-nota').onclick = () => {
+      if (!activeDateStr) return;
+      const testoNota = document.getElementById('day-note-input').value;
+      
+      set(ref(db, 'note/' + activeDateStr), {
+        testo: testoNota
+      }).then(() => {
+        // Un piccolo feedback visivo per confermare il salvataggio
+        const btn = document.getElementById('btn-salva-nota');
+        btn.innerText = "✓ Salvato!";
+        btn.style.background = "#30D158"; // Verde iOS
+        setTimeout(() => {
+          btn.innerText = "Salva Nota";
+          btn.style.background = "#0A84FF"; // Torna Blu iOS
+        }, 2000);
+      });
+    }
+
+    initFiltri();
+  </script>
+</body>
+</html>
